@@ -31,9 +31,13 @@ if(MSVC)
   endif()
 endif()
 
-foreach(src ${JPEG_SOURCES})
-  set(JPEG_SRCS ${JPEG_SRCS} ../${src})
-endforeach()
+if(AVOID_DSYMUTIL_WARNINGS)
+    set(JPEG_SRCS ${JPEG_SOURCES})
+  else()
+    foreach(src ${JPEG_SOURCES})
+      set(JPEG_SRCS ${JPEG_SRCS} ../${src})
+    endforeach()
+endif()
 
 if(WITH_SIMD AND (MSVC_IDE OR XCODE))
   # This tells CMake that the "source" files haven't been generated yet

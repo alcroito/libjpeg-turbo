@@ -218,6 +218,8 @@ macro(boolean_number var)
   endif()
 endmacro()
 
+option(AVOID_DSYMUTIL_WARNINGS
+  "Avoid dsymutil warnings when using the static libraries" FALSE)
 option(ENABLE_SHARED "Build shared libraries" TRUE)
 boolean_number(ENABLE_SHARED)
 option(ENABLE_STATIC "Build static libraries" TRUE)
@@ -598,29 +600,53 @@ if(CMAKE_EXECUTABLE_SUFFIX_TMP)
 endif()
 message(STATUS "CMAKE_EXECUTABLE_SUFFIX = ${CMAKE_EXECUTABLE_SUFFIX}")
 
-set(JPEG16_SOURCES jcapistd.c jccolor.c jcdiffct.c jclossls.c jcmainct.c
+set(JPEG16_ORIGINAL_SOURCES jcapistd.c jccolor.c jcdiffct.c jclossls.c jcmainct.c
   jcprepct.c jcsample.c jdapistd.c jdcolor.c jddiffct.c jdlossls.c jdmainct.c
   jdpostct.c jdsample.c jutils.c)
-set(JPEG12_SOURCES ${JPEG16_SOURCES} jccoefct.c jcdctmgr.c jdcoefct.c
+set(JPEG12_ORIGINAL_SOURCES ${JPEG16_ORIGINAL_SOURCES} jccoefct.c jcdctmgr.c jdcoefct.c
   jddctmgr.c jdmerge.c jfdctfst.c jfdctint.c jidctflt.c jidctfst.c jidctint.c
   jidctred.c jquant1.c jquant2.c)
-set(JPEG_SOURCES ${JPEG12_SOURCES} jcapimin.c jchuff.c jcicc.c jcinit.c
+set(JPEG_ORIGINAL_SOURCES ${JPEG12_ORIGINAL_SOURCES} jcapimin.c jchuff.c jcicc.c jcinit.c
   jclhuff.c jcmarker.c jcmaster.c jcomapi.c jcparam.c jcphuff.c jctrans.c
   jdapimin.c jdatadst.c jdatasrc.c jdhuff.c jdicc.c jdinput.c jdlhuff.c
   jdmarker.c jdmaster.c jdphuff.c jdtrans.c jerror.c jfdctflt.c jmemmgr.c
   jmemnobs.c jpeg_nbits.c)
 
 if(WITH_ARITH_ENC OR WITH_ARITH_DEC)
-  set(JPEG_SOURCES ${JPEG_SOURCES} jaricom.c)
+  set(JPEG_ORIGINAL_SOURCES ${JPEG_ORIGINAL_SOURCES} jaricom.c)
 endif()
 
 if(WITH_ARITH_ENC)
-  set(JPEG_SOURCES ${JPEG_SOURCES} jcarith.c)
+  set(JPEG_ORIGINAL_SOURCES ${JPEG_ORIGINAL_SOURCES} jcarith.c)
 endif()
 
 if(WITH_ARITH_DEC)
-  set(JPEG_SOURCES ${JPEG_SOURCES} jdarith.c)
+  set(JPEG_ORIGINAL_SOURCES ${JPEG_ORIGINAL_SOURCES} jdarith.c)
 endif()
+
+# Make copies of the source files for the different bit counts, so that all the object file names
+# are unique in static archives. This avoids duplicate warnings for certain linkers and debug
+# info extractors (like Apple's ld and dsymutil).
+function(copy_sources in_sources infix out_var)
+  set(jpeg_sources "")
+  if(AVOID_DSYMUTIL_WARNINGS)
+    foreach(src_file ${in_sources})
+      get_filename_component(src_file_name "${src_file}" NAME_WLE)
+      get_filename_component(src_file_extension "${src_file}" LAST_EXT)
+      set(dest_path
+        "${CMAKE_CURRENT_BINARY_DIR}/${src_file_name}${infix}${src_file_extension}")
+      configure_file(${src_file} "${dest_path}" COPYONLY)
+      list(APPEND jpeg_sources "${dest_path}")
+    endforeach()
+  else()
+    set(jpeg_sources ${in_sources})
+  endif()
+  set(${out_var} "${jpeg_sources}" PARENT_SCOPE)
+endfunction()
+
+copy_sources("${JPEG16_ORIGINAL_SOURCES}" "_16" JPEG16_SOURCES)
+copy_sources("${JPEG12_ORIGINAL_SOURCES}" "_12" JPEG12_SOURCES)
+copy_sources("${JPEG_ORIGINAL_SOURCES}" "" JPEG_SOURCES)
 
 if(WITH_SIMD)
   add_subdirectory(simd)
